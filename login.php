@@ -1,37 +1,54 @@
 <?php
-require_once __DIR__ . '/../config/security.php';
-require_once __DIR__ . '/../config/Database.php';
+require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../models/Customer.php';
 require_once __DIR__ . '/../models/Employee.php';
+
+//log out
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header('Location: login.php');
+    exit;
+}
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $employee = new Employee((new Database())->connect());
-    $user = $employee->getByEmail(trim($_POST['email'] ?? ''));
+    $login = trim($_POST['login'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-    if ($user && password_verify($_POST['password'] ?? '', $user['password_hash'])) {
+    //log in with an email and staff with a user ID
+    $isCustomer = strpos($login, '@') !== false;
+    $user = $isCustomer
+        ? (new Customer(db()))->getByEmail($login)
+        : (new Employee(db()))->getByUserId($login);
+
+    if ($user && password_verify($password, $user['password_hash'])) {
         session_regenerate_id(true);
-        $_SESSION['employee_id'] = $user['employee_id'];
+        $_SESSION['user_id'] = $isCustomer ? $user['customer_id'] : $user['employee_id'];
         $_SESSION['first_name'] = $user['first_name'];
-        $_SESSION['role'] = $user['role'];
-        header('Location: dashboard.php');
+        $_SESSION['role'] = $isCustomer ? 'Customer' : $user['role'];
+        header('Location: index.php');
         exit;
     }
 
-    $error = 'Invalid email or password.';
+    $error = 'Invalid login or password.';
 }
+
+pageHeader('Log In');
 ?>
-<!DOCTYPE html>
-<html>
-<head><title>Login</title></head>
-<body>
-    <h1>Employee Login</h1>
-    <?php if ($error): ?><p style="color:red;"><?= htmlspecialchars($error) ?></p><?php endif; ?>
-    <form method="post">
-        <p>Email: <input type="email" name="email" maxlength="100" required></p>
-        <p>Password: <input type="password" name="password" required></p>
-        <p><button type="submit">Log In</button></p>
-    </form>
-    <p><a href="register.php">Create an account</a></p>
-</body>
-</html>
+<h1>Log In</h1>
+
+<?php if (isset($_GET['registered'])): ?><div class="success">Account created. You can log in now.</div><?php endif; ?>
+<?php if ($error): ?><div class="error"><?= e($error) ?></div><?php endif; ?>
+
+<form method="post" class="card">
+    <label>Email (customers) or User ID (staff)</label>
+    <input type="text" name="login" maxlength="100" value="<?= val('login') ?>" required>
+
+    <label>Password</label>
+    <input type="password" name="password" required>
+
+    <button type="submit">Log In</button>
+</form>
+<p class="muted">New customer? <a href="register.php">Create an account</a></p>
+<?php pageFooter(); ?>
